@@ -1,8 +1,12 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { db } from '../services/dataStore';
 import { AuthRequest } from '../middleware/auth';
+import { LeadModel } from '../models/mongooseSchemas';
 import { ILead, LeadStatus } from '../models/types';
 import { sendNotification } from '../services/notificationService';
+
+const isMongoActive = () => mongoose.connection.readyState === 1 && db.isMongoConnected;
 
 export const leadController = {
   // Public submission from contact/lead form
@@ -17,43 +21,69 @@ export const leadController = {
         });
       }
 
-      const newLead: ILead = {
-        _id: 'lead_' + Math.random().toString(36).substring(2, 9),
-        name,
-        email: email || 'not-provided@client.com',
-        phone: phone || '',
-        companyName: companyName || '',
-        websiteURL,
-        serviceRequired: serviceRequired || 'Server-Side Tracking & Meta CAPI',
-        budget: budget || '$2,500 - $5,000 / month',
-        message: message || '',
-        status: 'New',
-        notes: [
-          {
-            text: `Lead submitted via website. Budget: ${budget || '$2.5k-$5k'}.`,
-            author: 'System',
-            createdAt: new Date().toISOString()
-          }
-        ],
-        assignedTo: 'Sakib Al-Hasan (Admin)',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+      let createdLead: any = null;
 
-      db.leads.unshift(newLead);
+      if (isMongoActive()) {
+        createdLead = await LeadModel.create({
+          name,
+          email: email || 'not-provided@client.com',
+          phone: phone || '',
+          companyName: companyName || '',
+          websiteURL,
+          serviceRequired: serviceRequired || 'Server-Side Tracking & Meta CAPI',
+          budget: budget || '$2,500 - $5,000 / month',
+          message: message || '',
+          status: 'New',
+          notes: [
+            {
+              text: `Lead submitted via website. Budget: ${budget || '$2.5k-$5k'}.`,
+              author: 'System',
+              createdAt: new Date()
+            }
+          ],
+          assignedTo: 'Sakib (Super Admin)'
+        });
+      } else {
+        const newLead: ILead = {
+          _id: 'lead_' + Math.random().toString(36).substring(2, 9),
+          name,
+          email: email || 'not-provided@client.com',
+          phone: phone || '',
+          companyName: companyName || '',
+          websiteURL,
+          serviceRequired: serviceRequired || 'Server-Side Tracking & Meta CAPI',
+          budget: budget || '$2,500 - $5,000 / month',
+          message: message || '',
+          status: 'New',
+          notes: [
+            {
+              text: `Lead submitted via website. Budget: ${budget || '$2.5k-$5k'}.`,
+              author: 'System',
+              createdAt: new Date().toISOString()
+            }
+          ],
+          assignedTo: 'Sakib (Super Admin)',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        db.leads.unshift(newLead);
+        createdLead = newLead;
+      }
+
+      const leadId = createdLead._id ? createdLead._id.toString() : createdLead.id;
 
       // Trigger multi-channel alert
       await sendNotification({
         type: 'lead',
         title: `🔥 New Lead: ${name} (${companyName || websiteURL})`,
         message: `Requested: ${serviceRequired || 'Tracking'}. Budget: ${budget}. Phone: ${phone}`,
-        metadata: { leadId: newLead._id, website: websiteURL }
+        metadata: { leadId, website: websiteURL }
       });
 
       return res.status(201).json({
         success: true,
         message: 'Thank you! Your request has been received. Our tracking engineers will reach out within 2 hours.',
-        lead: newLead
+        lead: createdLead
       });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
@@ -64,27 +94,50 @@ export const leadController = {
   getAllLeads: async (req: AuthRequest, res: Response) => {
     try {
       const { status, search } = req.query;
-      let leads = db.leads;
 
-      if (status && typeof status === 'string') {
-        leads = leads.filter(l => l.status.toLowerCase() === status.toLowerCase());
+      if (isMongoActive()) {
+        const query: any = {};
+        if (status && typeof status === 'string') {
+          query.status = status;
+        }
+        if (search && typeof search === 'string') {
+          query.$or = [
+            { name: { $regex: search, $options: 'i' } },
+            { companyName: { $regex: search, $options: 'i' } },
+            { websiteURL: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } }
+          ];
+        }
+
+        const leads = await LeadModel.find(query).sort({ createdAt: -1 }).lean();
+        return res.status(200).json({
+          success: true,
+          count: leads.length,
+          leads
+        });
+      } else {
+        let leads = db.leads;
+
+        if (status && typeof status === 'string') {
+          leads = leads.filter(l => l.status.toLowerCase() === status.toLowerCase());
+        }
+
+        if (search && typeof search === 'string') {
+          const q = search.toLowerCase();
+          leads = leads.filter(l => 
+            l.name.toLowerCase().includes(q) ||
+            l.companyName.toLowerCase().includes(q) ||
+            l.websiteURL.toLowerCase().includes(q) ||
+            l.email.toLowerCase().includes(q)
+          );
+        }
+
+        return res.status(200).json({
+          success: true,
+          count: leads.length,
+          leads
+        });
       }
-
-      if (search && typeof search === 'string') {
-        const query = search.toLowerCase();
-        leads = leads.filter(l => 
-          l.name.toLowerCase().includes(query) ||
-          l.companyName.toLowerCase().includes(query) ||
-          l.websiteURL.toLowerCase().includes(query) ||
-          l.email.toLowerCase().includes(query)
-        );
-      }
-
-      return res.status(200).json({
-        success: true,
-        count: leads.length,
-        leads
-      });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
@@ -94,11 +147,20 @@ export const leadController = {
   getLeadById: async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const lead = db.leads.find(l => l._id === id);
-      if (!lead) {
-        return res.status(404).json({ success: false, message: 'Lead not found.' });
+
+      if (isMongoActive()) {
+        const lead = await LeadModel.findById(id).lean();
+        if (!lead) {
+          return res.status(404).json({ success: false, message: 'Lead not found in MongoDB.' });
+        }
+        return res.status(200).json({ success: true, lead });
+      } else {
+        const lead = db.leads.find(l => l._id === id);
+        if (!lead) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+        return res.status(200).json({ success: true, lead });
       }
-      return res.status(200).json({ success: true, lead });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
@@ -118,25 +180,47 @@ export const leadController = {
         });
       }
 
-      const lead = db.leads.find(l => l._id === id);
-      if (!lead) {
-        return res.status(404).json({ success: false, message: 'Lead not found.' });
+      if (isMongoActive()) {
+        const lead = await LeadModel.findById(id);
+        if (!lead) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+
+        const prevStatus = lead.status;
+        lead.status = status;
+        lead.notes.push({
+          text: `Status updated from '${prevStatus}' to '${status}'.`,
+          author: req.user?.name || 'Admin',
+          createdAt: new Date()
+        });
+        await lead.save();
+
+        return res.status(200).json({
+          success: true,
+          message: `Lead status updated to ${status}.`,
+          lead
+        });
+      } else {
+        const lead = db.leads.find(l => l._id === id);
+        if (!lead) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+
+        const prevStatus = lead.status;
+        lead.status = status;
+        lead.updatedAt = new Date().toISOString();
+        lead.notes.push({
+          text: `Status updated from '${prevStatus}' to '${status}'.`,
+          author: req.user?.name || 'Admin',
+          createdAt: new Date().toISOString()
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: `Lead status updated to ${status}.`,
+          lead
+        });
       }
-
-      const prevStatus = lead.status;
-      lead.status = status;
-      lead.updatedAt = new Date().toISOString();
-      lead.notes.push({
-        text: `Status updated from '${prevStatus}' to '${status}'.`,
-        author: req.user?.name || 'Admin',
-        createdAt: new Date().toISOString()
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: `Lead status updated to ${status}.`,
-        lead
-      });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
@@ -152,25 +236,45 @@ export const leadController = {
         return res.status(400).json({ success: false, message: 'Note text cannot be empty.' });
       }
 
-      const lead = db.leads.find(l => l._id === id);
-      if (!lead) {
-        return res.status(404).json({ success: false, message: 'Lead not found.' });
+      if (isMongoActive()) {
+        const lead = await LeadModel.findById(id);
+        if (!lead) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+
+        lead.notes.push({
+          text: noteText,
+          author: req.user?.name || 'Admin',
+          createdAt: new Date()
+        });
+        await lead.save();
+
+        return res.status(200).json({
+          success: true,
+          message: 'Internal note added to lead.',
+          lead
+        });
+      } else {
+        const lead = db.leads.find(l => l._id === id);
+        if (!lead) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+
+        const newNote = {
+          text: noteText,
+          author: req.user?.name || 'Admin',
+          createdAt: new Date().toISOString()
+        };
+
+        lead.notes.push(newNote);
+        lead.updatedAt = new Date().toISOString();
+
+        return res.status(200).json({
+          success: true,
+          message: 'Internal note added to lead.',
+          lead
+        });
       }
-
-      const newNote = {
-        text: noteText,
-        author: req.user?.name || 'Admin',
-        createdAt: new Date().toISOString()
-      };
-
-      lead.notes.push(newNote);
-      lead.updatedAt = new Date().toISOString();
-
-      return res.status(200).json({
-        success: true,
-        message: 'Internal note added to lead.',
-        lead
-      });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
@@ -182,24 +286,45 @@ export const leadController = {
       const { id } = req.params;
       const { assignedTo } = req.body;
 
-      const lead = db.leads.find(l => l._id === id);
-      if (!lead) {
-        return res.status(404).json({ success: false, message: 'Lead not found.' });
+      if (isMongoActive()) {
+        const lead = await LeadModel.findById(id);
+        if (!lead) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+
+        lead.assignedTo = assignedTo;
+        lead.notes.push({
+          text: `Assigned to ${assignedTo}`,
+          author: req.user?.name || 'Admin',
+          createdAt: new Date()
+        });
+        await lead.save();
+
+        return res.status(200).json({
+          success: true,
+          message: `Lead assigned to ${assignedTo}`,
+          lead
+        });
+      } else {
+        const lead = db.leads.find(l => l._id === id);
+        if (!lead) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+
+        lead.assignedTo = assignedTo;
+        lead.updatedAt = new Date().toISOString();
+        lead.notes.push({
+          text: `Assigned to ${assignedTo}`,
+          author: req.user?.name || 'Admin',
+          createdAt: new Date().toISOString()
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: `Lead assigned to ${assignedTo}`,
+          lead
+        });
       }
-
-      lead.assignedTo = assignedTo;
-      lead.updatedAt = new Date().toISOString();
-      lead.notes.push({
-        text: `Assigned to ${assignedTo}`,
-        author: req.user?.name || 'Admin',
-        createdAt: new Date().toISOString()
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: `Lead assigned to ${assignedTo}`,
-        lead
-      });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
@@ -209,19 +334,33 @@ export const leadController = {
   deleteLead: async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const idx = db.leads.findIndex(l => l._id === id);
-      if (idx === -1) {
-        return res.status(404).json({ success: false, message: 'Lead not found.' });
-      }
 
-      const deleted = db.leads.splice(idx, 1);
-      return res.status(200).json({
-        success: true,
-        message: 'Lead record deleted.',
-        lead: deleted[0]
-      });
+      if (isMongoActive()) {
+        const deleted = await LeadModel.findByIdAndDelete(id).lean();
+        if (!deleted) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+        return res.status(200).json({
+          success: true,
+          message: 'Lead record deleted from MongoDB.',
+          lead: deleted
+        });
+      } else {
+        const idx = db.leads.findIndex(l => l._id === id);
+        if (idx === -1) {
+          return res.status(404).json({ success: false, message: 'Lead not found.' });
+        }
+
+        const deleted = db.leads.splice(idx, 1);
+        return res.status(200).json({
+          success: true,
+          message: 'Lead record deleted.',
+          lead: deleted[0]
+        });
+      }
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
   }
 };
+

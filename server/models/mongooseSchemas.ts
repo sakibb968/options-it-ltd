@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 
 // User Schema
 const UserSchema = new Schema({
@@ -7,12 +7,12 @@ const UserSchema = new Schema({
   password: { type: String, required: true },
   role: { 
     type: String, 
-    enum: ['Super Admin', 'Admin', 'Editor', 'Client'], 
+    enum: ['Super Admin', 'super_admin', 'Admin', 'admin', 'Editor', 'editor', 'Client', 'client'], 
     default: 'Admin' 
   },
-  phone: { type: String },
-  companyName: { type: String },
-  avatar: { type: String },
+  phone: { type: String, default: '' },
+  companyName: { type: String, default: '' },
+  avatar: { type: String, default: '' },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
@@ -206,14 +206,17 @@ const NotificationSchema = new Schema({
   read: { type: Boolean, default: false }
 }, { timestamps: true });
 
-export const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
-export const ServiceModel = mongoose.models.Service || mongoose.model('Service', ServiceSchema);
-export const LeadModel = mongoose.models.Lead || mongoose.model('Lead', LeadSchema);
-export const ClientModel = mongoose.models.Client || mongoose.model('Client', ClientSchema);
-export const ProjectModel = mongoose.models.Project || mongoose.model('Project', ProjectSchema);
-export const TestimonialModel = mongoose.models.Testimonial || mongoose.model('Testimonial', TestimonialSchema);
-export const BlogModel = mongoose.models.Blog || mongoose.model('Blog', BlogSchema);
-export const AuditRequestModel = mongoose.models.AuditRequest || mongoose.model('AuditRequest', AuditRequestSchema);
-export const ReportModel = mongoose.models.Report || mongoose.model('Report', ReportSchema);
-export const WebContentModel = mongoose.models.WebContent || mongoose.model('WebContent', WebContentSchema);
-export const NotificationModel = mongoose.models.Notification || mongoose.model('Notification', NotificationSchema);
+export const UserModel: Model<any> = mongoose.models.User || mongoose.model('User', UserSchema);
+export const ServiceModel: Model<any> = mongoose.models.Service || mongoose.model('Service', ServiceSchema);
+export const LeadModel: Model<any> = mongoose.models.Lead || mongoose.model('Lead', LeadSchema);
+export const ClientModel: Model<any> = mongoose.models.Client || mongoose.model('Client', ClientSchema);
+export const ProjectModel: Model<any> = mongoose.models.Project || mongoose.model('Project', ProjectSchema);
+export const TestimonialModel: Model<any> = mongoose.models.Testimonial || mongoose.model('Testimonial', TestimonialSchema);
+export const BlogModel: Model<any> = mongoose.models.Blog || mongoose.model('Blog', BlogSchema);
+export const AuditRequestModel: Model<any> = mongoose.models.AuditRequest || mongoose.model('AuditRequest', AuditRequestSchema);
+export const ReportModel: Model<any> = mongoose.models.Report || mongoose.model('Report', ReportSchema);
+export const WebContentModel: Model<any> = mongoose.models.WebContent || mongoose.model('WebContent', WebContentSchema);
+export const CMSContentModel: Model<any> = WebContentModel;
+export const NotificationModel: Model<any> = mongoose.models.Notification || mongoose.model('Notification', NotificationSchema);
+
+

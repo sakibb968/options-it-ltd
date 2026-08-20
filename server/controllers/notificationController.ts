@@ -1,18 +1,34 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { db } from '../services/dataStore';
 import { AuthRequest } from '../middleware/auth';
+import { NotificationModel } from '../models/mongooseSchemas';
 import { sendNotification } from '../services/notificationService';
+
+const isMongoActive = () => mongoose.connection.readyState === 1 && db.isMongoConnected;
 
 export const notificationController = {
   // Get all notifications
   getAllNotifications: async (req: AuthRequest, res: Response) => {
     try {
-      return res.status(200).json({
-        success: true,
-        count: db.notifications.length,
-        unreadCount: db.notifications.filter(n => !n.read).length,
-        notifications: db.notifications
-      });
+      if (isMongoActive()) {
+        const notifications = await NotificationModel.find().sort({ createdAt: -1 }).lean();
+        const unreadCount = await NotificationModel.countDocuments({ read: false });
+
+        return res.status(200).json({
+          success: true,
+          count: notifications.length,
+          unreadCount,
+          notifications
+        });
+      } else {
+        return res.status(200).json({
+          success: true,
+          count: db.notifications.length,
+          unreadCount: db.notifications.filter(n => !n.read).length,
+          notifications: db.notifications
+        });
+      }
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
@@ -22,17 +38,33 @@ export const notificationController = {
   markAsRead: async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const notif = db.notifications.find(n => n._id === id);
-      if (!notif) {
-        return res.status(404).json({ success: false, message: 'Notification not found.' });
+
+      if (isMongoActive()) {
+        const notif = await NotificationModel.findById(id);
+        if (!notif) {
+          return res.status(404).json({ success: false, message: 'Notification not found.' });
+        }
+
+        notif.read = true;
+        await notif.save();
+
+        return res.status(200).json({
+          success: true,
+          notification: notif
+        });
+      } else {
+        const notif = db.notifications.find(n => n._id === id);
+        if (!notif) {
+          return res.status(404).json({ success: false, message: 'Notification not found.' });
+        }
+
+        notif.read = true;
+
+        return res.status(200).json({
+          success: true,
+          notification: notif
+        });
       }
-
-      notif.read = true;
-
-      return res.status(200).json({
-        success: true,
-        notification: notif
-      });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
@@ -41,11 +73,19 @@ export const notificationController = {
   // Mark all notifications as read
   markAllAsRead: async (req: AuthRequest, res: Response) => {
     try {
-      db.notifications.forEach(n => { n.read = true; });
-      return res.status(200).json({
-        success: true,
-        message: 'All notifications marked as read.'
-      });
+      if (isMongoActive()) {
+        await NotificationModel.updateMany({ read: false }, { $set: { read: true } });
+        return res.status(200).json({
+          success: true,
+          message: 'All notifications marked as read in MongoDB.'
+        });
+      } else {
+        db.notifications.forEach(n => { n.read = true; });
+        return res.status(200).json({
+          success: true,
+          message: 'All notifications marked as read.'
+        });
+      }
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
@@ -81,3 +121,4 @@ export const notificationController = {
     }
   }
 };
+

@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { ENV } from '../config/env';
 import { 
   IUser, 
   IService, 
@@ -30,13 +31,18 @@ class DataStore {
   public isMongoConnected: boolean = false;
 
   constructor() {
-    this.seedInitialData();
+    // In production mode, all in-memory fallback mock data is strictly disabled.
+    if (ENV.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'production') {
+      this.seedInitialData();
+    } else {
+      console.log('🔒 Production Mode: In-memory mock data arrays are completely disabled. MongoDB is required.');
+    }
   }
 
   private seedInitialData() {
     // 1. Initial Users (Super Admin, Admin, Editor, Client)
     const salt = bcrypt.genSaltSync(10);
-    const superAdminPassword = bcrypt.hashSync('SuperAdmin@2026', salt);
+    const superAdminPassword = bcrypt.hashSync(ENV.SUPER_ADMIN_PASSWORD || 'SuperAdmin#OptionsIT2026!', salt);
     const adminPassword = bcrypt.hashSync('Admin@2026', salt);
     const editorPassword = bcrypt.hashSync('Editor@2026', salt);
     const clientPassword = bcrypt.hashSync('Client@2026', salt);
@@ -44,10 +50,10 @@ class DataStore {
     this.users = [
       {
         _id: 'usr_super_01',
-        name: 'Executive Super Admin',
-        email: 'superadmin@optionitld.com',
+        name: 'Sakib',
+        email: 'admin@optionsitld.com',
         password: superAdminPassword,
-        role: 'Super Admin',
+        role: 'super_admin',
         phone: '+8801806301888',
         companyName: 'Options IT Ltd',
         isActive: true,
@@ -56,7 +62,7 @@ class DataStore {
       },
       {
         _id: 'usr_admin_02',
-        name: 'Sakib Al-Hasan (Admin)',
+        name: 'Agency Operations Admin',
         email: 'admin@optionitld.com',
         password: adminPassword,
         role: 'Admin',
