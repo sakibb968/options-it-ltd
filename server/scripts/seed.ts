@@ -25,11 +25,35 @@ export async function seedDatabase(options: { wipeExisting?: boolean; quiet?: bo
 
   // Ensure Mongoose is connected
   if (mongoose.connection.readyState !== 1) {
+    if (!quiet) console.log('📡 Connecting to MongoDB for database initialization...');
     await mongoose.connect(ENV.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000
+      serverSelectionTimeoutMS: 6000,
+      connectTimeoutMS: 6000
     });
   }
+
+  if (!quiet) {
+    console.log('✅ MongoDB connection initialized and active successfully.');
+  }
+
+  // Verify 'users' collection exists
+  if (mongoose.connection.db) {
+    const existingCollections = await mongoose.connection.db.listCollections().toArray();
+    const collectionNames = existingCollections.map(c => c.name);
+    const usersCollectionExists = collectionNames.includes('users');
+    
+    if (!quiet) {
+      console.log(`🔍 Checking collections: 'users' collection ${usersCollectionExists ? 'already exists' : 'is not present (initializing...)'}.`);
+    }
+
+    if (!usersCollectionExists) {
+      await UserModel.createCollection();
+      if (!quiet) console.log('📁 Verified & created \'users\' collection.');
+    }
+  }
+
+  // Ensure model indexes are synchronized
+  await UserModel.init();
 
   if (wipeExisting) {
     if (!quiet) console.log('🧹 Wiping existing collections for fresh initialization...');
@@ -46,13 +70,14 @@ export async function seedDatabase(options: { wipeExisting?: boolean; quiet?: bo
     await NotificationModel.deleteMany({});
   }
 
-  // 1. Create the First Super Admin User (Mandatory)
+  // 1. Explicitly check if the Super Admin user exists before attempting creation (avoid duplicate entry errors)
   const salt = await bcrypt.genSalt(10);
-  const hashedSuperAdminPassword = await bcrypt.hash(ENV.SUPER_ADMIN_PASSWORD, salt);
+  const hashedSuperAdminPassword = await bcrypt.hash(ENV.SUPER_ADMIN_PASSWORD || 'SuperAdmin#OptionsIT2026!', salt);
+  const superAdminEmail = (ENV.SUPER_ADMIN_EMAIL || 'admin@optionsitld.com').toLowerCase().trim();
 
   const superAdminData = {
     name: ENV.SUPER_ADMIN_NAME || 'Sakib',
-    email: (ENV.SUPER_ADMIN_EMAIL || 'admin@optionsitld.com').toLowerCase(),
+    email: superAdminEmail,
     password: hashedSuperAdminPassword,
     role: 'super_admin',
     phone: '+8801806301888',
@@ -60,14 +85,42 @@ export async function seedDatabase(options: { wipeExisting?: boolean; quiet?: bo
     isActive: true
   };
 
-  const existingSuperAdmin = await UserModel.findOne({ email: superAdminData.email });
+  const existingSuperAdmin = await UserModel.findOne({
+    $or: [
+      { email: superAdminEmail },
+      { email: new RegExp(`^${superAdminEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    ]
+  });
+
   if (!existingSuperAdmin) {
-    await UserModel.create(superAdminData);
-    if (!quiet) console.log(`👑 Super Admin created: ${superAdminData.name} <${superAdminData.email}> (Role: ${superAdminData.role})`);
+    if (!quiet) console.log(`👑 Super Admin not found in 'users' collection. Creating: ${superAdminData.name} <${superAdminData.email}>...`);
+    try {
+      await UserModel.create(superAdminData);
+      if (!quiet) console.log(`✅ Super Admin created successfully: ${superAdminData.name} <${superAdminData.email}> (Role: ${superAdminData.role})`);
+    } catch (createErr: any) {
+      if (createErr.code === 11000) {
+        if (!quiet) console.warn(`⚠️ Super Admin with email ${superAdminData.email} already exists (duplicate key caught).`);
+      } else {
+        throw createErr;
+      }
+    }
   } else {
-    // Update credentials to ensure password & role are current
-    await UserModel.updateOne({ email: superAdminData.email }, { $set: superAdminData });
-    if (!quiet) console.log(`👑 Super Admin updated/verified: ${superAdminData.name} <${superAdminData.email}>`);
+    // Avoid duplicate creation; update existing Super Admin record to ensure current credentials
+    if (!quiet) console.log(`ℹ️ Super Admin user exists: ${existingSuperAdmin.name} <${existingSuperAdmin.email}>. Verifying role and credentials...`);
+    await UserModel.updateOne(
+      { _id: existingSuperAdmin._id },
+      {
+        $set: {
+          name: superAdminData.name,
+          password: superAdminData.password,
+          role: 'super_admin',
+          isActive: true,
+          phone: superAdminData.phone,
+          companyName: superAdminData.companyName
+        }
+      }
+    );
+    if (!quiet) console.log(`👑 Super Admin credentials verified & updated: ${superAdminData.name} <${superAdminData.email}>`);
   }
 
   // Additional Team & Client Users
@@ -136,7 +189,11 @@ export async function seedDatabase(options: { wipeExisting?: boolean; quiet?: bo
   for (const u of demoUsers) {
     const exists = await UserModel.findOne({ email: u.email });
     if (!exists) {
-      await UserModel.create(u);
+      try {
+        await UserModel.create(u);
+      } catch (err: any) {
+        if (err.code !== 11000) throw err;
+      }
     }
   }
 
