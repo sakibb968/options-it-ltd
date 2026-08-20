@@ -1,7 +1,7 @@
 export const ENV = {
   PORT: process.env.PORT || 3000,
   NODE_ENV: process.env.NODE_ENV || 'development',
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/options_it_ltd',
+  MONGODB_URI: process.env.MONGODB_URI || '',
   JWT_SECRET: process.env.JWT_SECRET || 'options_it_super_secure_jwt_secret_key_2026',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   SUPER_ADMIN_NAME: process.env.SUPER_ADMIN_NAME || 'Sakib',

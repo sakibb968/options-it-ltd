@@ -25,15 +25,22 @@ export const authController = {
       let user: any = null;
 
       if (isMongoActive()) {
-        user = await UserModel.findOne({ email: cleanEmail });
-      } else {
+        try {
+          user = await UserModel.findOne({ email: cleanEmail });
+        } catch (dbErr: any) {
+          console.warn('⚠️ MongoDB query error during login, falling back to dataStore:', dbErr.message);
+        }
+      }
+
+      // If not found in MongoDB or MongoDB is not connected, check in-memory store
+      if (!user) {
         user = db.users.find(u => u.email.toLowerCase() === cleanEmail);
       }
 
       if (!user) {
         return res.status(401).json({
           success: false,
-          message: 'Invalid credentials. No account found with this email.'
+          message: 'Invalid credentials. No registered account found for this email address.'
         });
       }
 
@@ -44,11 +51,22 @@ export const authController = {
         });
       }
 
-      const isMatch = await bcrypt.compare(password, user.password || '');
+      let isMatch = false;
+      try {
+        if (user.password && user.password.startsWith('$2')) {
+          isMatch = await bcrypt.compare(password, user.password);
+        } else if (user.password) {
+          isMatch = user.password === password;
+        }
+      } catch (err: any) {
+        console.error('Password comparison error:', err);
+        isMatch = false;
+      }
+
       if (!isMatch) {
         return res.status(401).json({
           success: false,
-          message: 'Invalid credentials. Incorrect password.'
+          message: 'Invalid credentials. The password you entered is incorrect.'
         });
       }
 

@@ -71,15 +71,53 @@ export async function seedDatabase(options: { wipeExisting?: boolean; quiet?: bo
   }
 
   // Additional Team & Client Users
+  const adminHashedPassword = await bcrypt.hash('Admin@2026', salt);
+  const superAdminQuickHashedPassword = await bcrypt.hash('SuperAdmin@2026', salt);
   const clientHashedPassword = await bcrypt.hash('Client@2026', salt);
   const editorHashedPassword = await bcrypt.hash('Editor@2026', salt);
 
   const demoUsers = [
     {
+      name: 'Agency Operations Admin',
+      email: 'admin@optionitld.com',
+      password: adminHashedPassword,
+      role: 'Admin',
+      phone: '+8801806301888',
+      companyName: 'Options IT Ltd',
+      isActive: true
+    },
+    {
+      name: 'Super Admin',
+      email: 'superadmin@optionitld.com',
+      password: superAdminQuickHashedPassword,
+      role: 'super_admin',
+      phone: '+8801806301888',
+      companyName: 'Options IT Ltd',
+      isActive: true
+    },
+    {
+      name: 'Super Admin',
+      email: 'superadmin@optionsitld.com',
+      password: superAdminQuickHashedPassword,
+      role: 'super_admin',
+      phone: '+8801806301888',
+      companyName: 'Options IT Ltd',
+      isActive: true
+    },
+    {
+      name: 'Sarah Content Editor',
+      email: 'editor@optionitld.com',
+      password: editorHashedPassword,
+      role: 'Editor',
+      phone: '+8801806301888',
+      companyName: 'Options IT Ltd',
+      isActive: true
+    },
+    {
       name: 'Sarah Content Editor',
       email: 'editor@optionsitld.com',
       password: editorHashedPassword,
-      role: 'editor',
+      role: 'Editor',
       phone: '+8801806301888',
       companyName: 'Options IT Ltd',
       isActive: true
@@ -88,7 +126,7 @@ export async function seedDatabase(options: { wipeExisting?: boolean; quiet?: bo
       name: 'Julian Hayes (Apex Nutrition)',
       email: 'client@apexnutrition.com',
       password: clientHashedPassword,
-      role: 'client',
+      role: 'Client',
       phone: '+1 415 890 2341',
       companyName: 'Apex Performance Nutrition',
       isActive: true

@@ -35,10 +35,26 @@ async function startServer() {
   app.use('/api/v1', apiRouter);
   app.use('/api', apiRouter); // Alias for convenience
 
-  // 5. Global Error Handling Middleware
+  // Catch-all for unhandled /api/* routes to ALWAYS return JSON (prevent HTML fallback)
+  app.all('/api/*', (req: Request, res: Response) => {
+    res.status(404).json({
+      success: false,
+      message: `API endpoint not found: ${req.method} ${req.originalUrl}`
+    });
+  });
+
+  // 5. Global Error Handling Middleware (Always return JSON)
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    // Handle JSON parse errors from invalid request body
+    if (err instanceof SyntaxError && 'body' in err) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid JSON payload received in request body.'
+      });
+    }
+
     logger.error('Unhandled API Exception:', err);
-    res.status(err.status || 500).json({
+    return res.status(err.status || 500).json({
       success: false,
       message: err.message || 'Internal server error occurred.',
       error: ENV.NODE_ENV === 'development' ? err.stack : undefined

@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
+import { db } from '../services/dataStore';
 import authRoutes from './authRoutes';
 import dashboardRoutes from './dashboardRoutes';
 import cmsRoutes from './cmsRoutes';
@@ -17,8 +19,14 @@ const apiRouter = Router();
 
 // Health Check
 apiRouter.get('/health', (req, res) => {
+  const isMongo = mongoose.connection.readyState === 1 && db.isMongoConnected;
   res.status(200).json({
     status: 'ok',
+    database: {
+      connected: isMongo,
+      driver: isMongo ? 'MongoDB (Active)' : 'In-Memory State Store (Active)',
+      state: mongoose.connection.readyState
+    },
     agency: 'Options IT Ltd',
     version: '1.0.0',
     timestamp: new Date().toISOString(),

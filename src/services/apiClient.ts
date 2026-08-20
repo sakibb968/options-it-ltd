@@ -4,7 +4,7 @@ const API_BASE = '/api/v1';
 
 export const apiClient = {
   getToken: () => localStorage.getItem('options_it_token') || '',
-  setToken: (token: string) => localStorage.getItem('options_it_token'),
+  setToken: (token: string) => localStorage.setItem('options_it_token', token),
   getUser: () => {
     try {
       const u = localStorage.getItem('options_it_user');
@@ -23,6 +23,7 @@ export const apiClient = {
     const token = localStorage.getItem('options_it_token');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       ...(options.headers as Record<string, string>)
     };
 
@@ -30,14 +31,32 @@ export const apiClient = {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers
+      });
+    } catch (networkErr: any) {
+      throw new Error(`Unable to reach server. Please check your network connection (${networkErr.message || 'Offline'}).`);
+    }
 
-    const data = await response.json();
+    let data: any = {};
+    const rawText = await response.text();
+    if (rawText && rawText.trim().length > 0) {
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        console.warn(`Non-JSON response from ${endpoint}:`, rawText.slice(0, 150));
+        data = { message: `Server returned unexpected format (${response.status}: ${response.statusText})` };
+      }
+    } else {
+      data = {};
+    }
+
     if (!response.ok) {
-      throw new Error(data.message || 'Request failed');
+      const errorMsg = data?.message || data?.error || `Request failed with HTTP status ${response.status}`;
+      throw new Error(errorMsg);
     }
     return data;
   },

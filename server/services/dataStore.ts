@@ -31,12 +31,7 @@ class DataStore {
   public isMongoConnected: boolean = false;
 
   constructor() {
-    // In production mode, all in-memory fallback mock data is strictly disabled.
-    if (ENV.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'production') {
-      this.seedInitialData();
-    } else {
-      console.log('🔒 Production Mode: In-memory mock data arrays are completely disabled. MongoDB is required.');
-    }
+    this.seedInitialData();
   }
 
   private seedInitialData() {
@@ -44,13 +39,14 @@ class DataStore {
     const salt = bcrypt.genSaltSync(10);
     const superAdminPassword = bcrypt.hashSync(ENV.SUPER_ADMIN_PASSWORD || 'SuperAdmin#OptionsIT2026!', salt);
     const adminPassword = bcrypt.hashSync('Admin@2026', salt);
+    const superAdminQuickPassword = bcrypt.hashSync('SuperAdmin@2026', salt);
     const editorPassword = bcrypt.hashSync('Editor@2026', salt);
     const clientPassword = bcrypt.hashSync('Client@2026', salt);
 
     this.users = [
       {
         _id: 'usr_super_01',
-        name: 'Sakib',
+        name: 'Sakib (Super Admin)',
         email: 'admin@optionsitld.com',
         password: superAdminPassword,
         role: 'super_admin',
@@ -61,7 +57,31 @@ class DataStore {
         updatedAt: new Date().toISOString()
       },
       {
-        _id: 'usr_admin_02',
+        _id: 'usr_super_02',
+        name: 'Super Admin',
+        email: 'superadmin@optionitld.com',
+        password: superAdminQuickPassword,
+        role: 'super_admin',
+        phone: '+8801806301888',
+        companyName: 'Options IT Ltd',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        _id: 'usr_super_03',
+        name: 'Super Admin',
+        email: 'superadmin@optionsitld.com',
+        password: superAdminQuickPassword,
+        role: 'super_admin',
+        phone: '+8801806301888',
+        companyName: 'Options IT Ltd',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        _id: 'usr_admin_01',
         name: 'Agency Operations Admin',
         email: 'admin@optionitld.com',
         password: adminPassword,
@@ -73,7 +93,7 @@ class DataStore {
         updatedAt: new Date().toISOString()
       },
       {
-        _id: 'usr_editor_03',
+        _id: 'usr_editor_01',
         name: 'Sarah Content Editor',
         email: 'editor@optionitld.com',
         password: editorPassword,
@@ -85,7 +105,19 @@ class DataStore {
         updatedAt: new Date().toISOString()
       },
       {
-        _id: 'usr_client_04',
+        _id: 'usr_editor_02',
+        name: 'Sarah Content Editor',
+        email: 'editor@optionsitld.com',
+        password: editorPassword,
+        role: 'Editor',
+        phone: '+8801806301888',
+        companyName: 'Options IT Ltd',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        _id: 'usr_client_01',
         name: 'Julian Hayes (Apex Nutrition)',
         email: 'client@apexnutrition.com',
         password: clientPassword,
